@@ -37,6 +37,7 @@ body{
   background:#1a1a2e;padding:14px 16px 12px;
   position:fixed;top:0;left:50%;transform:translateX(-50%);
   width:100%;max-width:480px;z-index:400;
+  /* room for lang selector */
 }
 .header-loc{display:flex;align-items:center;gap:4px;font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;}
 .header-loc::before{content:'📍';font-size:10px;}
@@ -222,18 +223,40 @@ body{
 
 /* Leaflet pin overrides */
 .leaflet-container{font-family:inherit;}
+
+/* ── LANG SELECTOR ── */
+.lang-sel{
+  position:absolute;top:14px;right:14px;
+  display:flex;gap:4px;align-items:center;
+}
+.lang-btn{
+  background:rgba(255,255,255,0.1);
+  border:1px solid rgba(255,255,255,0.18);
+  color:rgba(255,255,255,0.6);
+  font-size:11px;font-weight:700;
+  padding:4px 8px;border-radius:8px;
+  cursor:pointer;transition:all .15s;letter-spacing:.3px;
+}
+.lang-btn.active{
+  background:#4a7fc1;border-color:#4a7fc1;color:#fff;
+}
 </style>
 </head>
 <body>
 
 <!-- HEADER -->
 <div class="header">
-  <div class="header-loc">NH Hotel Köln Altstadt · 14–16 Juni 2026</div>
-  <h1>Team Meeting <span>Köln</span></h1>
+  <div class="lang-sel">
+    <button class="lang-btn" onclick="setLang('de')">DE</button>
+    <button class="lang-btn" onclick="setLang('en')">EN</button>
+    <button class="lang-btn active" onclick="setLang('es')">ES</button>
+  </div>
+  <div class="header-loc" id="hdr-loc">NH Hotel Köln Altstadt · 14–16 Juni 2026</div>
+  <h1 id="hdr-title">Team Meeting <span>Köln</span></h1>
   <div class="header-badges">
-    <span class="badge">3 Días</span>
-    <span class="badge">3 Restaurantes</span>
-    <span class="badge">2 Actividades</span>
+    <span class="badge" id="badge-days">3 Días</span>
+    <span class="badge" id="badge-rest">3 Restaurantes</span>
+    <span class="badge" id="badge-act">2 Actividades</span>
   </div>
 </div>
 
@@ -548,10 +571,12 @@ function openDetail(id) {
   iconEl.textContent = p.emoji;
   iconEl.style.background = CAT_COLORS[p.cat];
 
-  document.getElementById('dc-name').textContent = p.name;
+  const ldata = LANGS[currentLang].places[id] || {};
+  document.getElementById('dc-name').textContent = ldata.name || p.name;
 
   const tagsEl = document.getElementById('dc-tags');
-  tagsEl.innerHTML = p.tags.map(tg => `<span class="ltag ${tg.c}">${tg.t}</span>`).join('');
+  const tags = ldata.tags || p.tags;
+  tagsEl.innerHTML = tags.map(tg => `<span class="ltag ${tg.c}">${tg.t}</span>`).join('');
 
   const rowsEl = document.getElementById('dc-rows');
   rowsEl.innerHTML = p.rows.map(r => {
@@ -561,7 +586,9 @@ function openDetail(id) {
     return `<div class="dc-row"><span class="dc-row-icon">${r.icon}</span><div class="dc-row-text">${textHtml}</div></div>`;
   }).join('');
 
+  const L2 = LANGS[currentLang];
   document.getElementById('dc-maps-btn').href = p.map;
+  document.getElementById('dc-maps-btn').textContent = L2.mapsOpenBtn;
   const callBtn = document.getElementById('dc-call-btn');
   if (p.tel) {
     callBtn.href = p.tel;
@@ -618,16 +645,20 @@ function closeDetail() {
 function renderLocList() {
   const list = document.getElementById('locList');
   const order = ['nh-hotel','vapiano','rheinfahrt','tartufo','osteria','citytour','haxenhaus'];
+  const lp = LANGS[currentLang].places;
   list.innerHTML = order.map(id => {
     const p = PLACES[id];
-    const tagsHtml = p.tags.map(tg => `<span class="ltag ${tg.c}">${tg.t}</span>`).join('');
-    const timeRow = p.rows.find(r => r.icon === '🕐');
+    const ldata = lp[id] || {};
+    const name = ldata.name || p.name;
+    const time = ldata.time || (p.rows.find(r => r.icon === '🕐') || {}).text || '';
+    const tags = ldata.tags || p.tags;
+    const tagsHtml = tags.map(tg => `<span class="ltag ${tg.c}">${tg.t}</span>`).join('');
     return `
       <div class="loc-item" data-cat="${p.cat}" onclick="openDetail('${p.id}')">
         <div class="loc-icon ${p.cat}">${p.emoji}</div>
         <div class="loc-info">
-          <div class="loc-name">${p.name}</div>
-          <div class="loc-time">${timeRow ? timeRow.text : ''}</div>
+          <div class="loc-name">${name}</div>
+          <div class="loc-time">${time}</div>
           <div class="loc-tags">${tagsHtml}</div>
         </div>
         <span class="loc-arrow">›</span>
@@ -655,10 +686,164 @@ function setDay(day) {
   document.querySelectorAll('.agenda-day').forEach((d,i) => d.classList.toggle('active', i===day));
 }
 
+// ── I18N ──────────────────────────────────────────────
+const LANGS = {
+  de: {
+    headerLoc: 'NH Hotel Köln Altstadt · 14–16 Juni 2026',
+    headerTitle: 'Team Meeting <span>Köln</span>',
+    days: '3 Tage', restaurants: '3 Restaurants', activities: '2 Aktivitäten',
+    navMap:'Karte', navAgenda:'Agenda', navInfo:'Info',
+    filterAll:'Alle', filterHotel:'Hotel', filterCafe:'Café', filterActivity:'Aktivitäten', filterRestaurant:'Restaurants',
+    mapsBtn:'🗺️ In Maps öffnen', callBtn:'📞 Anrufen',
+    dayLabels:['Tag 1 · <strong>Sonntag, 14. Juni 2026</strong> — Ankunft & Aktivität',
+               'Tag 2 · <strong>Montag, 15. Juni 2026</strong> — Meeting & Teamabend',
+               'Tag 3 · <strong>Dienstag, 16. Juni 2026</strong> — 1:1 & Abschluss'],
+    dayTabs:[{n:'14',d:'So'},{n:'15',d:'Mo'},{n:'16',d:'Di'}],
+    infoHotelTitle:'🏨 Hotel', infoRestTitle:'🍽️ Reservierte Restaurants',
+    infoContactTitle:'📞 Kontakte', infoTopicsTitle:'🗓️ Themen Tag 2',
+    checkin:'Check-in', checkout:'Check-out',
+    reserved:'Reserviert', lunch:'Mittagessen', dinner:'Abendessen',
+    // place names & times
+    places:{
+      'nh-hotel':  {name:'NH Hotel Köln Altstadt',     time:'14:00 Uhr · So, 14. Juni',          tags:[{t:'Hotel',c:'hotel'}]},
+      'vapiano':   {name:'Vapiano Zollhafen',           time:'14:30 – 16:15 Uhr · So, 14. Juni',  tags:[{t:'So',c:'day'},{t:'Café',c:'cafe'}]},
+      'rheinfahrt':{name:'Panoramafahrt · Cologne Tourist', time:'16:45 – 18:15 Uhr · So, 14. Juni', tags:[{t:'So',c:'day'},{t:'Aktivität',c:'activity'}]},
+      'tartufo':   {name:'Ristorante il Tartufo',       time:'Abendessen · So 14 Jun · ~20:00 Uhr',tags:[{t:'So · Abendessen',c:'day'},{t:'Reserviert',c:'reserved'}]},
+      'osteria':   {name:"L'Osteria Köln Zollhafen",    time:'13:00 – 15:00 Uhr · Mo, 15. Juni',  tags:[{t:'Mo',c:'day'},{t:'Mittagessen',c:'restaurant'}]},
+      'citytour':  {name:'City Tour · Dom & Altstadt',  time:'16:00 – 17:30 Uhr · Mo, 15. Juni',  tags:[{t:'Mo',c:'day'},{t:'Aktivität',c:'activity'}]},
+      'haxenhaus': {name:'Restaurant Haxenhaus',        time:'Abendessen · Mo 15 Jun · 19:30 Uhr', tags:[{t:'Mo · Abendessen',c:'day'},{t:'Reserviert',c:'reserved'}]}
+    },
+    mapsOpenBtn:'🗺️ In Maps öffnen', callOpenBtn:'📞 Anrufen'
+  },
+  en: {
+    headerLoc: 'NH Hotel Köln Altstadt · 14–16 June 2026',
+    headerTitle: 'Team Meeting <span>Köln</span>',
+    days: '3 Days', restaurants: '3 Restaurants', activities: '2 Activities',
+    navMap:'Map', navAgenda:'Agenda', navInfo:'Info',
+    filterAll:'All', filterHotel:'Hotel', filterCafe:'Café', filterActivity:'Activities', filterRestaurant:'Restaurants',
+    mapsBtn:'🗺️ Open in Maps', callBtn:'📞 Call',
+    dayLabels:['Day 1 · <strong>Sunday, 14 June 2026</strong> — Arrival & Activity',
+               'Day 2 · <strong>Monday, 15 June 2026</strong> — Meeting & Team Dinner',
+               'Day 3 · <strong>Tuesday, 16 June 2026</strong> — 1:1s & Wrap-up'],
+    dayTabs:[{n:'14',d:'Sun'},{n:'15',d:'Mon'},{n:'16',d:'Tue'}],
+    infoHotelTitle:'🏨 Hotel', infoRestTitle:'🍽️ Reserved Restaurants',
+    infoContactTitle:'📞 Contacts', infoTopicsTitle:'🗓️ Meeting Topics Day 2',
+    checkin:'Check-in', checkout:'Check-out',
+    reserved:'Reserved', lunch:'Lunch', dinner:'Dinner',
+    places:{
+      'nh-hotel':  {name:'NH Hotel Köln Altstadt',     time:'14:00 · Sun, 14 June',          tags:[{t:'Hotel',c:'hotel'}]},
+      'vapiano':   {name:'Vapiano Zollhafen',           time:'14:30 – 16:15 · Sun 14 Jun',    tags:[{t:'Sun',c:'day'},{t:'Café',c:'cafe'}]},
+      'rheinfahrt':{name:'Rhine Panorama Cruise',       time:'16:45 – 18:15 · Sun 14 Jun',    tags:[{t:'Sun',c:'day'},{t:'Activity',c:'activity'}]},
+      'tartufo':   {name:'Ristorante il Tartufo',       time:'Dinner · Sun 14 Jun · ~20:00',   tags:[{t:'Sun · Dinner',c:'day'},{t:'Reserved',c:'reserved'}]},
+      'osteria':   {name:"L'Osteria Köln Zollhafen",    time:'13:00 – 15:00 · Mon, 15 Jun',   tags:[{t:'Mon',c:'day'},{t:'Lunch',c:'restaurant'}]},
+      'citytour':  {name:'City Tour · Cathedral & Old Town', time:'16:00 – 17:30 · Mon 15 Jun',tags:[{t:'Mon',c:'day'},{t:'Activity',c:'activity'}]},
+      'haxenhaus': {name:'Restaurant Haxenhaus',        time:'Dinner · Mon 15 Jun · 19:30',    tags:[{t:'Mon · Dinner',c:'day'},{t:'Reserved',c:'reserved'}]}
+    },
+    mapsOpenBtn:'🗺️ Open in Maps', callOpenBtn:'📞 Call'
+  },
+  es: {
+    headerLoc: 'NH Hotel Köln Altstadt · 14–16 Jun 2026',
+    headerTitle: 'Team Meeting <span>Köln</span>',
+    days: '3 Días', restaurants: '3 Restaurantes', activities: '2 Actividades',
+    navMap:'Mapa', navAgenda:'Agenda', navInfo:'Info',
+    filterAll:'Todos', filterHotel:'Hotel', filterCafe:'Café', filterActivity:'Actividades', filterRestaurant:'Restaurantes',
+    mapsBtn:'🗺️ Abrir en Maps', callBtn:'📞 Llamar',
+    dayLabels:['Día 1 · <strong>Domingo, 14 Jun 2026</strong> — Llegada & Actividad',
+               'Día 2 · <strong>Lunes, 15 Jun 2026</strong> — Reunión & Cena de equipo',
+               'Día 3 · <strong>Martes, 16 Jun 2026</strong> — 1:1 & Cierre'],
+    dayTabs:[{n:'14',d:'Dom'},{n:'15',d:'Lun'},{n:'16',d:'Mar'}],
+    infoHotelTitle:'🏨 Hotel Base', infoRestTitle:'🍽️ Restaurantes reservados',
+    infoContactTitle:'📞 Teléfonos de contacto', infoTopicsTitle:'🗓️ Temas Día 2',
+    checkin:'Check-in', checkout:'Check-out',
+    reserved:'Reservado', lunch:'Almuerzo', dinner:'Cena',
+    places:{
+      'nh-hotel':  {name:'NH Hotel Köln Altstadt',     time:'14:00 h · Dom, 14 Jun',          tags:[{t:'Hotel base',c:'hotel'}]},
+      'vapiano':   {name:'Vapiano Zollhafen',           time:'14:30 – 16:15 h · Dom 14 Jun',   tags:[{t:'Dom',c:'day'},{t:'Café',c:'cafe'}]},
+      'rheinfahrt':{name:'Panoramafahrt · Cologne Tourist', time:'16:45 – 18:15 h · Dom 14 Jun',tags:[{t:'Dom',c:'day'},{t:'Actividad',c:'activity'}]},
+      'tartufo':   {name:'Ristorante il Tartufo',       time:'Cena · Dom 14 Jun · ~20:00 h',   tags:[{t:'Dom · Cena',c:'day'},{t:'Reservado',c:'reserved'}]},
+      'osteria':   {name:"L'Osteria Köln Zollhafen",    time:'13:00 – 15:00 h · Lun 15 Jun',   tags:[{t:'Lun',c:'day'},{t:'Almuerzo',c:'restaurant'}]},
+      'citytour':  {name:'City Tour · Dom & Altstadt',  time:'16:00 – 17:30 h · Lun 15 Jun',   tags:[{t:'Lun',c:'day'},{t:'Actividad',c:'activity'}]},
+      'haxenhaus': {name:'Restaurant Haxenhaus',        time:'Cena · Lun 15 Jun · 19:30 h',    tags:[{t:'Lun · Cena',c:'day'},{t:'Reservado',c:'reserved'}]}
+    },
+    mapsOpenBtn:'🗺️ Abrir en Maps', callOpenBtn:'📞 Llamar'
+  }
+};
+
+let currentLang = 'es';
+
+function setLang(lang) {
+  currentLang = lang;
+  const L = LANGS[lang];
+
+  // Lang buttons
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase() === lang);
+  });
+
+  // Header
+  document.getElementById('hdr-loc').textContent = L.headerLoc;
+  document.getElementById('hdr-title').innerHTML = L.headerTitle;
+  document.getElementById('badge-days').textContent = L.days;
+  document.getElementById('badge-rest').textContent = L.restaurants;
+  document.getElementById('badge-act').textContent = L.activities;
+
+  // Filter chips
+  const chips = document.querySelectorAll('.fchip');
+  const labels = [L.filterAll, L.filterHotel, L.filterCafe, L.filterActivity, L.filterRestaurant];
+  chips.forEach((chip, i) => {
+    const dot = chip.querySelector('.dot');
+    chip.textContent = '';
+    if (dot) chip.appendChild(dot);
+    chip.appendChild(document.createTextNode(labels[i]));
+  });
+
+  // Nav buttons
+  ['map','agenda','info'].forEach((n,i) => {
+    const btn = document.getElementById('nav-'+n);
+    const icon = btn.querySelector('.ni');
+    btn.textContent = '';
+    btn.appendChild(icon);
+    btn.appendChild(document.createTextNode([L.navMap,L.navAgenda,L.navInfo][i]));
+  });
+
+  // Day tabs
+  document.querySelectorAll('.day-tab').forEach((tab, i) => {
+    const span = tab.querySelector('.dn');
+    tab.textContent = '';
+    tab.appendChild(span);
+    tab.appendChild(document.createTextNode(L.dayTabs[i].d));
+  });
+
+  // Day labels in agenda
+  document.querySelectorAll('.day-label').forEach((dl, i) => {
+    dl.innerHTML = L.dayLabels[i];
+  });
+
+  // Maps/Call buttons in detail
+  const mapsBtn = document.getElementById('dc-maps-btn');
+  const callBtn2 = document.getElementById('dc-call-btn');
+  if (mapsBtn) mapsBtn.textContent = L.mapsOpenBtn;
+  if (callBtn2) callBtn2.textContent = L.callOpenBtn;
+
+  // Info panel section titles
+  const infoTitles = document.querySelectorAll('.is-title');
+  if (infoTitles[0]) infoTitles[0].textContent = L.infoHotelTitle;
+  if (infoTitles[1]) infoTitles[1].textContent = L.infoRestTitle;
+  if (infoTitles[2]) infoTitles[2].textContent = L.infoContactTitle;
+  if (infoTitles[3]) infoTitles[3].textContent = L.infoTopicsTitle;
+
+  // Re-render location list with translated names/tags
+  renderLocList();
+
+  // If a detail is open, refresh it
+  if (currentDetail) openDetail(currentDetail);
+}
+
 // ── INIT ──────────────────────────────────────────────
 window.addEventListener('load', () => {
   renderLocList();
   initMap();
+  setLang('es');
 });
 </script>
 </body>
